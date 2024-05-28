@@ -1,0 +1,55 @@
+type Post {
+  id: ID!
+  title: String!
+  content: String!
+  userId: ID!
+  author: User!
+  commentsEnabled: Boolean!
+  comments: [Comment!]!
+}
+
+type Comment {
+  id: ID!
+  postId: ID!
+  userId: ID!
+  author: User!
+  content: String!
+  parentCommentId: ID
+  replies: [Comment!]!
+}
+
+type User {
+  id: ID!
+  username: String!
+}
+
+input CreatePostInput {
+  userId: ID!
+  title: String!
+  content: String!
+  commentsEnabled: Boolean!
+}
+
+input CreateCommentInput {
+  userId: ID!
+  postId: ID!
+  content: String!
+  parentCommentId: ID
+}
+
+type Query {
+  getPosts: [Post!]!
+  getPost(id: ID!): Post!
+  getComments(commId: ID!): [Comment!]!
+}
+
+type Mutation {
+  createPost(input: CreatePostInput!): Post!
+  createComment(input: CreateCommentInput!): Comment!
+  createUser(username: String!): User!
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+}
