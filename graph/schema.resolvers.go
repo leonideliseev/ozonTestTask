@@ -75,7 +75,19 @@ func (r *mutationResolver) CreateComment(ctx context.Context, input model.Create
 		return nil, err
 	}
 
+	// уведомление подписчиков о новом комментарии под постом
+	r.NotifySubscribers(input.PostID, comm.ToGraphQL())
+
 	return comm.ToGraphQL(), nil
+}
+
+func (r *Resolver) NotifySubscribers(postId string, comment *model.Comment) {
+    r.mu.RLock()
+    defer r.mu.RUnlock()
+
+    if subscriber, ok := r.subscribers[postId]; ok {
+        subscriber <- comment
+    }
 }
 
 // CreateUser is the resolver for the CreateUser field.
@@ -144,11 +156,34 @@ func (r *queryResolver) GetComments(ctx context.Context, commID string) ([]*mode
 	return comms, nil
 }
 
+// CommentAdded is the resolver for the commentAdded field.
+func (r *subscriptionResolver) CommentAdded(ctx context.Context, postID string) (<-chan *model.Comment, error) {
+	comments := make(chan *model.Comment, 1)
+
+    r.mu.Lock()
+    r.subscribers[postID] = comments
+    r.mu.Unlock()
+
+	// когда контекст завершится, то произойдёт удаление подписки к посту
+    go func() {
+        <-ctx.Done()
+        r.mu.Lock()
+        delete(r.subscribers, postID)
+        r.mu.Unlock()
+    }()
+
+    return comments, nil
+}
+
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
+// Subscription returns SubscriptionResolver implementation.
+func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionResolver{r} }
+
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
+type subscriptionResolver struct{ *Resolver }

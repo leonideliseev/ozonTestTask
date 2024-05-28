@@ -49,7 +49,12 @@ type Mutation {
   createUser(username: String!): User!
 }
 
+type Subscription {
+  commentAdded(postId: ID!): Comment!
+}
+
 schema {
   query: Query
   mutation: Mutation
+  subscription: Subscription
 }

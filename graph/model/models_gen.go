@@ -42,6 +42,9 @@ type Post struct {
 type Query struct {
 }
 
+type Subscription struct {
+}
+
 type User struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`

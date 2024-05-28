@@ -15,6 +15,13 @@ import (
 	"github.com/leonideliseev/ozonTestTask/pkg/storage/in_memory"
 	"github.com/leonideliseev/ozonTestTask/pkg/storage/postgresql"
 	"github.com/sirupsen/logrus"
+
+	"time"
+
+	"github.com/99designs/gqlgen/graphql/handler/extension"
+	"github.com/99designs/gqlgen/graphql/handler/transport"
+	"github.com/gorilla/websocket"
+	"github.com/rs/cors"
 )
 
 func main() {
@@ -49,8 +56,24 @@ func main() {
 	newResolver := graph.NewResolver(store)
 	srv := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: newResolver}))
 
+	srv.AddTransport(transport.POST{})
+    srv.AddTransport(transport.Websocket{
+        KeepAlivePingInterval: 10 * time.Second,
+        Upgrader: websocket.Upgrader{
+            CheckOrigin: func(r *http.Request) bool {
+                return true
+            },
+        },
+    })
+	srv.Use(extension.Introspection{})
+
+	c := cors.New(cors.Options{
+        AllowedOrigins:   []string{"http://localhost:" + HOST_PORT},
+        AllowCredentials: true,
+    })
+	
 	http.Handle("/", playground.Handler("GraphQL playground", "/query"))
-	http.Handle("/query", srv)
+	http.Handle("/query", c.Handler(srv))
 
 	log.Printf("connect to http://localhost:%s/ for GraphQL playground", HOST_PORT)
 	log.Fatal(http.ListenAndServe(":"+PORT, nil))
