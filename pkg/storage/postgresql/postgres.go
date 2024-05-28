@@ -91,14 +91,22 @@ func (s *PostgreStorage) CreateUser(u smodel.CreateUser) (*smodel.User, error) {
 	return &user, nil
 }
 
-func (s *PostgreStorage) GetPosts() ([]*smodel.Post, error) {
-	var posts []*smodel.Post
+func (s *PostgreStorage) GetPosts(limit, offset int) (*smodel.PostPage, error) {
+	var posts []smodel.Post
+	var totalCount int
 
-	if err := s.DB.Preload("User").Find(&posts).Error; err != nil {
+	if err := s.DB.Model(&smodel.Post{}).Count(&totalCount).Error; err != nil {
 		return nil, err
 	}
 
-	return posts, nil
+	if err := s.DB.Preload("User").Limit(limit).Offset(offset).Find(&posts).Error; err != nil {
+		return nil, err
+	}
+
+	return &smodel.PostPage{
+		Posts: posts,
+		TotalCount: totalCount,
+	}, nil
 }
 
 func (s *PostgreStorage) GetPost(id uint) (*smodel.Post, error) {

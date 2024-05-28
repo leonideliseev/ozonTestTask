@@ -35,6 +35,11 @@ type Comment struct {
 	Replies []*Comment `gorm:"foreignkey:ParentID"`
 }
 
+type PostPage struct {
+	Posts []Post
+	TotalCount int
+}
+
 type CreatePost struct {
 	Title    string
 	Content  string

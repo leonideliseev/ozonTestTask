@@ -39,6 +39,11 @@ type Post struct {
 	Comments        []*Comment `json:"comments"`
 }
 
+type PostPage struct {
+	Posts      []*Post `json:"posts"`
+	TotalCount int     `json:"totalCount"`
+}
+
 type Query struct {
 }
 

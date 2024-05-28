@@ -136,16 +136,23 @@ func (m *MemoryStorage) CreateUser(u smodel.CreateUser) (*smodel.User, error) {
 	return &user, nil
 }
 
-func (m *MemoryStorage) GetPosts() ([]*smodel.Post, error) {
+func (m *MemoryStorage) GetPosts(limit, offset int) (*smodel.PostPage, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	posts := make([]*smodel.Post, 0, len(m.posts))
-	for _, post := range m.posts {
-		posts = append(posts, &post)
+	totalCount := len(m.posts)
+
+	posts := make([]smodel.Post, 0, limit)
+	for postId, post := range m.posts {
+		if int(postId) > offset && int(postId) <= offset + limit {
+			posts = append(posts, post)
+		}
 	}
 
-	return posts, nil
+	return &smodel.PostPage{
+		Posts: posts,
+		TotalCount: totalCount,
+	}, nil
 }
 
 func (m *MemoryStorage) GetPost(id uint) (*smodel.Post, error) {

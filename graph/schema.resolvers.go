@@ -10,7 +10,7 @@ import (
 	"strconv"
 
 	"github.com/leonideliseev/ozonTestTask/graph/model"
-	smodel "github.com/leonideliseev/ozonTestTask/pkg/model"
+	"github.com/leonideliseev/ozonTestTask/pkg/model"
 )
 
 // CreatePost is the resolver for the createPost field.
@@ -81,15 +81,6 @@ func (r *mutationResolver) CreateComment(ctx context.Context, input model.Create
 	return comm.ToGraphQL(), nil
 }
 
-func (r *Resolver) NotifySubscribers(postId string, comment *model.Comment) {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
-
-    if subscriber, ok := r.subscribers[postId]; ok {
-        subscriber <- comment
-    }
-}
-
 // CreateUser is the resolver for the CreateUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, username string) (*model.User, error) {
 	newUser := smodel.CreateUser{
@@ -105,19 +96,38 @@ func (r *mutationResolver) CreateUser(ctx context.Context, username string) (*mo
 }
 
 // GetPosts is the resolver for the getPosts field.
-func (r *queryResolver) GetPosts(ctx context.Context) ([]*model.Post, error) {
-	dirtyPosts, err := r.storage.GetPosts()
+func (r *queryResolver) GetPosts(ctx context.Context, limit *int, offset *int) (*model.PostPage, error) {
+	var lim, off int
+	if limit == nil {
+		lim = 20
+	} else {
+		lim = *limit
+	}
+
+	if offset == nil {
+		off = 0
+	} else {
+		off = *offset
+	}
+
+	badPostPage, err := r.storage.GetPosts(lim, off)
 	if err != nil {
 		return nil, err
 	}
 
+	dirtyPosts := badPostPage.Posts
 	posts := make([]*model.Post, 0, len(dirtyPosts))
 	for _, dirtyPost := range dirtyPosts {
 		post := dirtyPost.ToGraphQL()
 		posts = append(posts, post)
 	}
 
-	return posts, nil
+	postPage := &model.PostPage{
+		Posts: posts,
+		TotalCount: badPostPage.TotalCount,
+	}
+
+	return postPage, nil
 }
 
 // GetPost is the resolver for the getPost field.
@@ -160,19 +170,19 @@ func (r *queryResolver) GetComments(ctx context.Context, commID string) ([]*mode
 func (r *subscriptionResolver) CommentAdded(ctx context.Context, postID string) (<-chan *model.Comment, error) {
 	comments := make(chan *model.Comment, 1)
 
-    r.mu.Lock()
-    r.subscribers[postID] = comments
-    r.mu.Unlock()
+	r.mu.Lock()
+	r.subscribers[postID] = comments
+	r.mu.Unlock()
 
 	// когда контекст завершится, то произойдёт удаление подписки к посту
-    go func() {
-        <-ctx.Done()
-        r.mu.Lock()
-        delete(r.subscribers, postID)
-        r.mu.Unlock()
-    }()
+	go func() {
+		<-ctx.Done()
+		r.mu.Lock()
+		delete(r.subscribers, postID)
+		r.mu.Unlock()
+	}()
 
-    return comments, nil
+	return comments, nil
 }
 
 // Mutation returns MutationResolver implementation.
@@ -187,3 +197,18 @@ func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionRes
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//   - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//     it when you're done.
+//   - You have helper methods in this file. Move them out to keep these resolver files clean.
+func (r *Resolver) NotifySubscribers(postId string, comment *model.Comment) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if subscriber, ok := r.subscribers[postId]; ok {
+		subscriber <- comment
+	}
+}

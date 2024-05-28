@@ -8,6 +8,11 @@ type Post {
   comments: [Comment!]!
 }
 
+type PostPage {
+  posts: [Post!]!
+  totalCount: Int!
+}
+
 type Comment {
   id: ID!
   postId: ID!
@@ -38,7 +43,7 @@ input CreateCommentInput {
 }
 
 type Query {
-  getPosts: [Post!]!
+  getPosts(limit: Int, offset: Int): PostPage!
   getPost(id: ID!): Post!
   getComments(commId: ID!): [Comment!]!
 }
