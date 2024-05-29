@@ -10,7 +10,7 @@ import (
 	"strconv"
 
 	"github.com/leonideliseev/ozonTestTask/graph/model"
-	"github.com/leonideliseev/ozonTestTask/pkg/model"
+	smodel "github.com/leonideliseev/ozonTestTask/pkg/model"
 )
 
 // CreatePost is the resolver for the createPost field.
@@ -97,18 +97,7 @@ func (r *mutationResolver) CreateUser(ctx context.Context, username string) (*mo
 
 // GetPosts is the resolver for the getPosts field.
 func (r *queryResolver) GetPosts(ctx context.Context, limit *int, offset *int) (*model.PostPage, error) {
-	var lim, off int
-	if limit == nil {
-		lim = 20
-	} else {
-		lim = *limit
-	}
-
-	if offset == nil {
-		off = 0
-	} else {
-		off = *offset
-	}
+	lim, off := setLimOff(limit, offset)
 
 	badPostPage, err := r.storage.GetPosts(lim, off)
 	if err != nil {
@@ -123,7 +112,7 @@ func (r *queryResolver) GetPosts(ctx context.Context, limit *int, offset *int) (
 	}
 
 	postPage := &model.PostPage{
-		Posts: posts,
+		Posts:      posts,
 		TotalCount: badPostPage.TotalCount,
 	}
 
@@ -131,13 +120,15 @@ func (r *queryResolver) GetPosts(ctx context.Context, limit *int, offset *int) (
 }
 
 // GetPost is the resolver for the getPost field.
-func (r *queryResolver) GetPost(ctx context.Context, id string) (*model.Post, error) {
+func (r *queryResolver) GetPost(ctx context.Context, id string, limit *int, offset *int) (*model.Post, error) {
+	lim, off := setLimOff(limit, offset)
+
 	pid, err := strconv.ParseUint(id, 10, 32)
 	if err != nil {
 		return nil, err
 	}
 
-	post, err := r.storage.GetPost(uint(pid))
+	post, err := r.storage.GetPost(lim, off, uint(pid))
 	if err != nil {
 		return nil, err
 	}
@@ -146,24 +137,27 @@ func (r *queryResolver) GetPost(ctx context.Context, id string) (*model.Post, er
 }
 
 // GetComments is the resolver for the getComments field.
-func (r *queryResolver) GetComments(ctx context.Context, commID string) ([]*model.Comment, error) {
+func (r *queryResolver) GetComments(ctx context.Context, commID string, limit *int, offset *int) (*model.Comment, error) {
+	lim, off := setLimOff(limit, offset)
+
 	cid, err := strconv.ParseUint(commID, 10, 32)
 	if err != nil {
 		return nil, err
 	}
 
-	dirtyComms, err := r.storage.GetComments(uint(cid))
+	comm, err := r.storage.GetComments(lim, off, uint(cid))
 	if err != nil {
 		return nil, err
 	}
 
+	/*dirtyComms := dirtyComm.Replies.Comms
 	comms := make([]*model.Comment, 0)
 	for _, dirtyComm := range dirtyComms {
 		comm := dirtyComm.ToGraphQL()
 		comms = append(comms, comm)
-	}
+	}*/
 
-	return comms, nil
+	return comm.ToGraphQL(), nil
 }
 
 // CommentAdded is the resolver for the commentAdded field.
@@ -211,4 +205,21 @@ func (r *Resolver) NotifySubscribers(postId string, comment *model.Comment) {
 	if subscriber, ok := r.subscribers[postId]; ok {
 		subscriber <- comment
 	}
+}
+func setLimOff(limit, offset *int) (int, int) {
+	var lim, off int
+
+	if limit == nil {
+		lim = 20
+	} else {
+		lim = *limit
+	}
+
+	if offset == nil {
+		off = 0
+	} else {
+		off = *offset
+	}
+
+	return lim, off
 }

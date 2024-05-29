@@ -2,14 +2,19 @@
 
 package model
 
+type CommPage struct {
+	Comments   []*Comment `json:"comments"`
+	TotalCount int        `json:"totalCount"`
+}
+
 type Comment struct {
-	ID              string     `json:"id"`
-	PostID          string     `json:"postId"`
-	UserID          string     `json:"userId"`
-	Author          *User      `json:"author"`
-	Content         string     `json:"content"`
-	ParentCommentID *string    `json:"parentCommentId,omitempty"`
-	Replies         []*Comment `json:"replies"`
+	ID              string    `json:"id"`
+	PostID          string    `json:"postId"`
+	UserID          string    `json:"userId"`
+	Author          *User     `json:"author"`
+	Content         string    `json:"content"`
+	ParentCommentID *string   `json:"parentCommentId,omitempty"`
+	ReplyPage       *CommPage `json:"replyPage"`
 }
 
 type CreateCommentInput struct {
@@ -30,13 +35,13 @@ type Mutation struct {
 }
 
 type Post struct {
-	ID              string     `json:"id"`
-	Title           string     `json:"title"`
-	Content         string     `json:"content"`
-	UserID          string     `json:"userId"`
-	Author          *User      `json:"author"`
-	CommentsEnabled bool       `json:"commentsEnabled"`
-	Comments        []*Comment `json:"comments"`
+	ID              string    `json:"id"`
+	Title           string    `json:"title"`
+	Content         string    `json:"content"`
+	UserID          string    `json:"userId"`
+	Author          *User     `json:"author"`
+	CommentsEnabled bool      `json:"commentsEnabled"`
+	CommPage        *CommPage `json:"commPage"`
 }
 
 type PostPage struct {

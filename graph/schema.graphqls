@@ -5,7 +5,7 @@ type Post {
   userId: ID!
   author: User!
   commentsEnabled: Boolean!
-  comments: [Comment!]!
+  commPage: CommPage!
 }
 
 type PostPage {
@@ -20,7 +20,12 @@ type Comment {
   author: User!
   content: String!
   parentCommentId: ID
-  replies: [Comment!]!
+  replyPage: CommPage!
+}
+
+type CommPage {
+  comments: [Comment!]!
+  totalCount: Int!
 }
 
 type User {
@@ -44,8 +49,8 @@ input CreateCommentInput {
 
 type Query {
   getPosts(limit: Int, offset: Int): PostPage!
-  getPost(id: ID!): Post!
-  getComments(commId: ID!): [Comment!]!
+  getPost(id: ID!, limit: Int, offset: Int): Post!
+  getComments(commId: ID!, limit: Int, offset: Int): Comment!
 }
 
 type Mutation {

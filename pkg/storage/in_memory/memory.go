@@ -50,7 +50,10 @@ func (m *MemoryStorage) CreatePost(p smodel.CreatePost) (*smodel.Post, error) {
 		UserID: p.UserId,
 		User: user,
 		CommentsEnabled: p.CommentsEnabled,
-		Comments: []*smodel.Comment{},
+		CommPage: &smodel.CommPage{
+			Comms: []*smodel.Comment{},
+			TotalCount: 0,
+		},
 	}
 
     m.posts[id] = post
@@ -142,10 +145,10 @@ func (m *MemoryStorage) GetPosts(limit, offset int) (*smodel.PostPage, error) {
 
 	totalCount := len(m.posts)
 
-	posts := make([]smodel.Post, 0, limit)
+	posts := make([]*smodel.Post, 0, limit)
 	for postId, post := range m.posts {
 		if int(postId) > offset && int(postId) <= offset + limit {
-			posts = append(posts, post)
+			posts = append(posts, &post)
 		}
 	}
 
@@ -155,7 +158,7 @@ func (m *MemoryStorage) GetPosts(limit, offset int) (*smodel.PostPage, error) {
 	}, nil
 }
 
-func (m *MemoryStorage) GetPost(id uint) (*smodel.Post, error) {
+func (m *MemoryStorage) GetPost(limit, offset int, id uint) (*smodel.Post, error) {
 	m.mu.RLock()
     defer m.mu.RUnlock()
 
@@ -166,14 +169,14 @@ func (m *MemoryStorage) GetPost(id uint) (*smodel.Post, error) {
     }
 
 	// получение комментариев к посту
-	comms := m.getComments(-int(id), 0)
+	//comms := m.getComments(limit, offset, -int(id), 0)
 
-	post.Comments = append(post.Comments, comms...)
+	post.CommPage = m.getComments(limit, offset, -int(id), 0)
 
     return &post, nil
 }
 
-func (m *MemoryStorage) GetComments(id uint) ([]*smodel.Comment, error) {
+func (m *MemoryStorage) GetComments(limit, offset int, id uint) (*smodel.Comment, error) {
 	m.mu.RLock()
     defer m.mu.RUnlock()
 
@@ -182,36 +185,47 @@ func (m *MemoryStorage) GetComments(id uint) ([]*smodel.Comment, error) {
 	if !ok {
 		return nil, errors.New(u.ErrorCommId(id))
 	}
-	
+
 	// получение комментариев
 	// начинаем с глубины 1, так как уже есть сам комментарий
-	comm.Replies = m.getComments(int(id), 1)
-	comms := []*smodel.Comment{&comm}
+	comm.ReplyPage = m.getComments(limit, offset, int(id), 1)
+	//comms := []*smodel.Comment{&comm}
 
-	return comms, nil
+	return &comm, nil
 }
 
 // рекурсивно получает комментарии
-func (m *MemoryStorage) getComments(id int, depth int) []*smodel.Comment {
+func (m *MemoryStorage) getComments(limit, offset, id, depth int) *smodel.CommPage {
 	m.mu.RLock()
     defer m.mu.RUnlock()
+
+	commPage := smodel.CommPage{
+		Comms: make([]*smodel.Comment, 0),
+		TotalCount: 0,
+	}
 
 	comms := make([]*smodel.Comment, 0)
 
 	if depth > 4 {
-		return comms
+		return &commPage
 	}
 
 	level, ok := m.commReply[id]
 	if !ok {
-		return comms
+		return &commPage
 	}
+
+	totalCount := len(level)
+	level = level[offset:offset+limit]
 
 	for _, lv := range level {
 		comm := m.comments[uint(lv)]
-		comm.Replies = m.getComments(lv, depth + 1)
+		comm.ReplyPage = m.getComments(limit, offset, lv, depth + 1)
 		comms = append(comms, &comm)
 	}
 
-	return comms
+	commPage.Comms = comms
+	commPage.TotalCount = totalCount
+
+	return &commPage
 }

@@ -16,27 +16,34 @@ type User struct {
 }
 
 type Post struct {
-	ID       uint     `gorm:"primary_key"`
-	Title    string   `gorm:"not null"`
-	Content  string   `gorm:"not null"`
-	UserID   uint     `gorm:"not null"`
-	User     User     `gorm:"foreignkey:UserID"`
-	CommentsEnabled bool `gorm:"not null"`
-	Comments []*Comment `gorm:"foreignkey:PostID"`
+	ID              uint       `gorm:"primary_key"`
+	Title           string     `gorm:"not null"`
+	Content         string     `gorm:"not null"`
+	UserID          uint       `gorm:"not null"`
+	User            User       `gorm:"foreignkey:UserID"`
+	CommentsEnabled bool       `gorm:"not null"`
+	Comments        []*Comment `gorm:"foreignkey:PostID"`
+	CommPage        *CommPage   `gorm:"-"`
 }
 
 type Comment struct {
-	ID       uint    `gorm:"primary_key"`
-	PostID   uint    `gorm:"not null"`
-	UserID   uint    `gorm:"not null"`
-	User     User    `gorm:"foreignkey:UserID"`
-	Content  string  `gorm:"not null"`
-	ParentID *uint
-	Replies []*Comment `gorm:"foreignkey:ParentID"`
+	ID        uint       `gorm:"primary_key"`
+	PostID    uint       `gorm:"not null"`
+	UserID    uint       `gorm:"not null"`
+	User      User       `gorm:"foreignkey:UserID"`
+	Content   string     `gorm:"not null"`
+	ParentID  *uint
+	Replies   []*Comment `gorm:"foreignkey:ParentID"`
+	ReplyPage *CommPage   `gorm:"-"`
 }
 
 type PostPage struct {
-	Posts []Post
+	Posts []*Post
+	TotalCount int
+}
+
+type CommPage struct {
+	Comms []*Comment
 	TotalCount int
 }
 
@@ -59,11 +66,18 @@ type CreateUser struct {
 }
 
 func (p *Post) ToGraphQL() *model.Post {
-	comments := make([]*model.Comment, len(p.Comments))
-	for i, comment := range p.Comments {
-		comments[i] = comment.ToGraphQL()
+	var totalCount int
+	var comments []*model.Comment
+	if p.CommPage != nil {
+		totalCount = p.CommPage.TotalCount
+		comments = make([]*model.Comment, len(p.CommPage.Comms))
+		for i, comment := range p.CommPage.Comms {
+			comments[i] = comment.ToGraphQL()
+		}
 	}
+
 	user := p.User.ToGraphQL()
+
 	return &model.Post{
 		ID:       strconv.FormatUint(uint64(p.ID), 10),
 		Title:    p.Title,
@@ -71,7 +85,10 @@ func (p *Post) ToGraphQL() *model.Post {
 		UserID:   strconv.FormatUint(uint64(p.UserID), 10),
 		Author:   user,
 		CommentsEnabled: p.CommentsEnabled,
-		Comments: comments,
+		CommPage: &model.CommPage{
+			Comments: comments,
+			TotalCount: totalCount,
+		},
 	}
 }
 
@@ -81,10 +98,17 @@ func (c *Comment) ToGraphQL() *model.Comment {
 		idStr := strconv.FormatUint(uint64(*c.ParentID), 10)
 		parentID = &idStr
 	}
-	children := make([]*model.Comment, len(c.Replies))
-	for i, child := range c.Replies {
-		children[i] = child.ToGraphQL()
+
+	var totalCount int
+	var replies []*model.Comment
+	if c.ReplyPage != nil {
+		totalCount = c.ReplyPage.TotalCount
+		replies = make([]*model.Comment, len(c.ReplyPage.Comms))
+		for i, child := range c.ReplyPage.Comms {
+			replies[i] = child.ToGraphQL()
+		}
 	}
+
 	return &model.Comment{
 		ID:       strconv.FormatUint(uint64(c.ID), 10),
 		PostID:   strconv.FormatUint(uint64(c.PostID), 10),
@@ -92,7 +116,10 @@ func (c *Comment) ToGraphQL() *model.Comment {
 		UserID:   strconv.FormatUint(uint64(c.UserID), 10),
 		Author:     c.User.ToGraphQL(),
 		Content:  c.Content,
-		Replies: children,
+		ReplyPage: &model.CommPage{
+			Comments: replies,
+			TotalCount: totalCount,
+		},
 	}
 }
 

@@ -92,7 +92,7 @@ func (s *PostgreStorage) CreateUser(u smodel.CreateUser) (*smodel.User, error) {
 }
 
 func (s *PostgreStorage) GetPosts(limit, offset int) (*smodel.PostPage, error) {
-	var posts []smodel.Post
+	var posts []*smodel.Post
 	var totalCount int
 
 	if err := s.DB.Model(&smodel.Post{}).Count(&totalCount).Error; err != nil {
@@ -109,30 +109,43 @@ func (s *PostgreStorage) GetPosts(limit, offset int) (*smodel.PostPage, error) {
 	}, nil
 }
 
-func (s *PostgreStorage) GetPost(id uint) (*smodel.Post, error) {
+func (s *PostgreStorage) GetPost(limit, offset int, id uint) (*smodel.Post, error) {
 	var post smodel.Post
 
-	if err := s.DB.Preload("User").Preload("Comments", "parent_id IS NULL").Preload("Comments.User").First(&post, id).Error; err != nil {
+	if err := s.DB.Preload("User").Preload("Comments", func(db *gorm.DB) *gorm.DB {
+		return db.Where("parent_id IS NULL").Offset(offset).Limit(limit)
+	}).Preload("Comments.User").First(&post, id).Error; err != nil {
 		// проверка существования поста
 		if gorm.IsRecordNotFoundError(err) {
             return nil, errors.New(u.ErrorPostId(id))
         }
 		return nil, err
-	}
+	}	
 
 	// получение комментариев к посту
 	// начинаем с глубины 1, так как уже есть ответы на пост
 	comms := post.Comments
 	for _, comm := range comms {
-		subComms, _ := s.getComments((*comm).ID, 1)
-		(*comm).Replies = subComms
+		subComms, _ := s.getComments(limit, offset, (*comm).ID, 1)
+		(*comm).ReplyPage = subComms
+	}
+
+	var totalCount int
+	if err := s.DB.Model(&smodel.Comment{}).Where("post_id = ? AND parent_id IS NULL", id).Count(&totalCount).Error; err != nil {
+		return nil, err
+	}
+
+	post.CommPage = &smodel.CommPage{
+		Comms: comms,
+		TotalCount: totalCount,
 	}
 
 	return &post, nil
 }
 
-func (s *PostgreStorage) GetComments(id uint) ([]*smodel.Comment, error) {
+func (s *PostgreStorage) GetComments(limit, offset int, id uint) (*smodel.Comment, error) {
 	var comm smodel.Comment
+	
 	if err := s.DB.Preload("User").First(&comm, id).Error; err != nil {
 		// проверка существования комментария
 		if gorm.IsRecordNotFoundError(err) {
@@ -144,39 +157,52 @@ func (s *PostgreStorage) GetComments(id uint) ([]*smodel.Comment, error) {
 	// получение комментариев
 	// начинаем с глубины 1, так как уже есть сам комментарий
 	var err error
-	comm.Replies, err = s.getComments(id, 1)
+	comm.ReplyPage, err = s.getComments(limit, offset, id, 1)
 	if err != nil {
 		return nil, err
 	}
 
-	comms := []*smodel.Comment{&comm}
-
-    return comms, nil
+    return &comm, nil
 }
 
 // рекурсивно получает комментарии
-func (s *PostgreStorage) getComments(parentID uint, depth int) ([]*smodel.Comment, error) {
+func (s *PostgreStorage) getComments(limit, offset int, id uint, depth int) (*smodel.CommPage, error) {
+	commPage := smodel.CommPage{
+		Comms: make([]*smodel.Comment, 0),
+		TotalCount: 0,
+	}
+
 	var comms []*smodel.Comment
 
 	if depth > 4 {
-		return comms, nil
+		return &commPage, nil
 	}
 
-	if err := s.DB.Preload("User").Where("parent_id = ?", parentID).Find(&comms).Error; err != nil {
+	if err := s.DB.Preload("User").Where("parent_id = ?", id).Offset(offset).Limit(limit).Find(&comms).Error; err != nil {
 		return nil, err
 	}
-	
-	if depth <= 4 {
-		for i := range comms {
-			childComments, err := s.getComments(comms[i].ID, depth + 1)
-			if err != nil {
-				return nil, err
-			}
-			comms[i].Replies = childComments
-		}
+
+	if len(comms) == 0 {
+		return &commPage, nil
 	}
 
-	return comms, nil
+	var totalCount int
+	if err := s.DB.Model(&smodel.Comment{}).Where("post_id = ? AND parent_id IS NULL", id).Count(&totalCount).Error; err != nil {
+		return nil, err
+	}
+	commPage.TotalCount = totalCount
+	
+	for i := range comms {
+		childComments, err := s.getComments(limit, offset, comms[i].ID, depth + 1)
+		if err != nil {
+			return nil, err
+		}
+		comms[i].ReplyPage = childComments
+	}
+
+	commPage.Comms = comms
+
+	return &commPage, nil
 }
 
 func (s *PostgreStorage) checkUserExists(userID uint) error {

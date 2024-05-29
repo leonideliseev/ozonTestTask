@@ -10,6 +10,6 @@ type Storage interface {
 	CreateComment(c smodel.CreateComment) (*smodel.Comment, error)
 	CreateUser(u smodel.CreateUser) (*smodel.User, error)
 	GetPosts(limit, offset int) (*smodel.PostPage, error)
-	GetPost(id uint) (*smodel.Post, error)
-	GetComments(id uint) ([]*smodel.Comment, error)
+	GetPost(limit, offset int, id uint) (*smodel.Post, error)
+	GetComments(limit, offset int, id uint) (*smodel.Comment, error)
 }
