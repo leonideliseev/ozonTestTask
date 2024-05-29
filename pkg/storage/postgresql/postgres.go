@@ -187,7 +187,7 @@ func (s *PostgreStorage) getComments(limit, offset int, id uint, depth int) (*sm
 	}
 
 	var totalCount int
-	if err := s.DB.Model(&smodel.Comment{}).Where("post_id = ? AND parent_id IS NULL", id).Count(&totalCount).Error; err != nil {
+	if err := s.DB.Model(&smodel.Comment{}).Where("parent_id = ?", id).Count(&totalCount).Error; err != nil {
 		return nil, err
 	}
 	commPage.TotalCount = totalCount
