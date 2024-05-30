@@ -44,7 +44,11 @@ func main() {
 	var store storage.Storage
 	var err error
 	if dbStore == "true" { // подключение к бд
-		connectionString := getEnv("DATABASE_URL", "postgres://postgres:qwerty@localhost:5432/postgres?sslmode=disable")
+		connectionString := getEnv("DATABASE_URL", "")
+		if connectionString == "" {
+			logrus.Fatalf("need to set DATABASE_URL in environment")
+		}
+
 		store, err = postgresql.NewPostgreStore(connectionString)
 		if err != nil {
 			logrus.Fatalf("failed init db: %s", err.Error())
